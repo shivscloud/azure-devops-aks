@@ -1,0 +1,87 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  name: 'singampool'
+
+# Define Variables for Environments
+variables:
+  - name: backendServiceArm
+    value: 'tf-azure-devops'
+  - name: backendAzureRmResourceGroupName
+    value: 'raj'
+  - name: backendAzureRmStorageAccountName
+    value: 'rajtfstate'
+  - name: backendAzureRmContainerName
+    value: 'rajfolder'
+  - name: backendAzureRmKey
+    value: 'terraform.tfstate'
+  - name: terraform_version
+    value: 'latest'
+  - name: terraform_action
+    value: 'destroy' # or 'destroy' based on your request
+
+stages:
+  - stage: TerraformValidate
+    jobs:
+      - job: TerraformValidateJob
+        continueOnError: false
+        pool:
+          name: 'singampool'
+        steps:
+          - checkout: self
+          - task: TerraformInstaller@1
+            displayName: terraform install
+            inputs:
+              terraformVersion: '$(terraform_version)'
+          - task: TerraformTaskV4@4
+            displayName: terraform init
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              backendServiceArm: '$(backendServiceArm)'
+              backendAzureRmResourceGroupName: '$(backendAzureRmResourceGroupName)'
+              backendAzureRmStorageAccountName: '$(backendAzureRmStorageAccountName)'
+              backendAzureRmContainerName: '$(backendAzureRmContainerName)'
+              backendAzureRmKey: '$(backendAzureRmKey)'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+
+          - task: TerraformTaskV4@4
+            inputs:
+              provider: 'azurerm'
+              command: 'validate'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+
+  - stage: TerraformApply
+    condition: succeeded('TerraformValidate')
+    jobs:
+      - job: TerraformApply
+        continueOnError: false
+        pool:
+          name: 'singampool'
+        steps:
+          - checkout: self
+          - task: TerraformInstaller@1
+            displayName: terraform install
+            inputs:
+              terraformVersion: '$(terraform_version)'
+          - task: TerraformTaskV4@4
+            displayName: terraform init and $(terraform_action)
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              backendServiceArm: '$(backendServiceArm)'
+              backendAzureRmResourceGroupName: '$(backendAzureRmResourceGroupName)'
+              backendAzureRmStorageAccountName: '$(backendAzureRmStorageAccountName)'
+              backendAzureRmContainerName: '$(backendAzureRmContainerName)'
+              backendAzureRmKey: '$(backendAzureRmKey)'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+          - task: TerraformTaskV4@4
+            inputs:
+              provider: 'azurerm'
+              command: '$(terraform_action)'
+              # command: 'destroy'
+              environmentServiceNameAzureRM: '$(backendServiceArm)'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
